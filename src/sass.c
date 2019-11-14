@@ -56,7 +56,7 @@ static inline sass_object *sass_fetch_object(zend_object *obj)
 
 static void sass_free_storage(zend_object *object)
 {
-    sass_object *obj = sass_object_fetch_object(object);
+    sass_object *obj = sass_fetch_object(object);
     if (obj->include_paths != NULL)
         efree(obj->include_paths);
 
