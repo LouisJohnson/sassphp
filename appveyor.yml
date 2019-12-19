@@ -22,7 +22,7 @@ install:
   - '"C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x64'
 
 build_script:
-  - cd C:\php-src\php-5.6.21-src
+  - cd C:\php-src\php-7.3.13-src
   - buildconf.bat --add-modules-dir=C:\projects
   - configure --disable-all --enable-cli --enable-sass
   - nmake php_sass.dll
