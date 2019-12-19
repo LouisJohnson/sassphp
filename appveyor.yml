@@ -1,5 +1,5 @@
 environment:
-   PHP_VERSION: 5.6.21
+   PHP_VERSION: 7.3.13
 
 configuration: Release
 
@@ -17,7 +17,7 @@ install:
   - echo Preparing Windows build...
   - echo Downloading PHP source code [%PHP_VERSION%]
   - cd C:\php-src
-  - appveyor DownloadFile http://windows.php.net/downloads/releases/php-5.6.21-src.zip -FileName php-src.zip
+  - appveyor DownloadFile http://windows.php.net/downloads/releases/php-7.3.13-src.zip -FileName php-src.zip
   - 7z x -y php-src.zip > nul
   - '"C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x64'
 
