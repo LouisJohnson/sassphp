@@ -408,7 +408,7 @@ void set_options(sass_object *this, struct Sass_Context *ctx)
  */
 PHP_METHOD(Sass, compile)
 {
-    sass_object *this = sass_object_fetch_object(Z_OBJ_P(getThis()));
+    sass_object *this = sass_fetch_object(Z_OBJ_P(getThis()));
 
     // Define our parameters as local variables
     char *source, *input_path = NULL;
