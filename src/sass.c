@@ -408,34 +408,26 @@ void set_options(sass_object *this, struct Sass_Context *ctx)
  */
 PHP_METHOD(Sass, compile)
 {
-    #if ZEND_MODULE_API_NO > 20131226
-    sass_object *this = Z_SASS_P(getThis());
-    #endif
-
-    #if ZEND_MODULE_API_NO <= 20131226
-    sass_object *this = (sass_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
-    #endif
+    sass_object *this = sass_object_fetch_object(Z_OBJ_P(getThis()));
 
     // Define our parameters as local variables
-    char *source;
-    #if ZEND_MODULE_API_NO <= 20131226
-    int source_len;
-    #endif
-    #if ZEND_MODULE_API_NO > 20131226
-    size_t source_len;
-    #endif
+    char *source, *input_path = NULL;
+    size_t source_len, input_path_len = 0;
 
     // Use zend_parse_parameters() to grab our source from the function call
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &source, &source_len) == FAILURE){
+    if (zend_parse_parameters_throw(ZEND_NUM_ARGS() TSRMLS_CC, "s|s", &source, &source_len, &input_path, &input_path_len) == FAILURE){
         RETURN_FALSE;
     }
 
     // Create a new sass_context
     struct Sass_Data_Context* data_context = sass_make_data_context(strdup(source));
-
     struct Sass_Context* ctx = sass_data_context_get_context(data_context);
 
-    set_options(this, ctx);
+    set_generic_options(this, ctx);
+    if (input_path != NULL){
+        struct Sass_Options* opts = sass_context_get_options(ctx);
+        sass_option_set_input_path(opts, input_path);
+    }
 
     int status = sass_compile_data_context(data_context);
 
@@ -446,12 +438,7 @@ PHP_METHOD(Sass, compile)
     }
     else
     {
-        #if ZEND_MODULE_API_NO <= 20131226
-        RETVAL_STRING(sass_context_get_output_string(ctx), 1);
-        #endif
-        #if ZEND_MODULE_API_NO > 20131226
         RETVAL_STRING(sass_context_get_output_string(ctx));
-        #endif
     }
 
     sass_delete_data_context(data_context);
