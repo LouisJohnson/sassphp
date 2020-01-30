@@ -9,9 +9,7 @@
  */
 
 #include <stdio.h>
-#if ZEND_MODULE_API_NO > 20131226
 #include <stdlib.h>.
-#endif
 
 #include "php_sass.h"
 #include "utilities.h"
@@ -65,31 +63,6 @@ static void sass_free_storage(zend_object *object)
 
 }
 
-#if ZEND_MODULE_API_NO <= 20131226
-zend_object_value sass_create_handler(zend_class_entry *type TSRMLS_DC) {
-    zval *tmp;
-    zend_object_value retval;
-
-    sass_object *obj = (sass_object *)emalloc(sizeof(sass_object));
-    memset(obj, 0, sizeof(sass_object));
-
-    obj->zo.ce = type;
-
-    ALLOC_HASHTABLE(obj->zo.properties);
-    zend_hash_init(obj->zo.properties, 0, NULL, ZVAL_PTR_DTOR, 0);
-#if PHP_VERSION_ID > 50399
-    object_properties_init(&(obj->zo), type);
-#endif
-
-    retval.handle = zend_objects_store_put(obj, NULL,
-        sass_free_storage, NULL TSRMLS_CC);
-    retval.handlers = &sass_handlers;
-
-    return retval;
- }
-#endif
-
-#if ZEND_MODULE_API_NO > 20131226
 zend_object * sass_create_handler(zend_class_entry *type) {
     size_t size = sizeof(sass_object) + zend_object_properties_size(type);
 
@@ -102,8 +75,6 @@ zend_object * sass_create_handler(zend_class_entry *type) {
 
     return &obj->zo;
 }
-
-#endif
 
 char *to_c_string(zval *var){
     if (Z_TYPE_P(var) != IS_STRING) {
@@ -392,7 +363,7 @@ PHP_METHOD(Sass, compile)
     struct Sass_Data_Context* data_context = sass_make_data_context(strdup(source));
     struct Sass_Context* ctx = sass_data_context_get_context(data_context);
 
-    set_generic_options(this, ctx);
+    set_options(this, ctx);
     if (input_path != NULL){
         struct Sass_Options* opts = sass_context_get_options(ctx);
         sass_option_set_input_path(opts, input_path);
