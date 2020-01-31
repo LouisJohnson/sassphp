@@ -539,7 +539,6 @@ PHP_METHOD(Sass, setMapPath)
     RETURN_NULL();
 }
 
-
 PHP_METHOD(Sass, getMapRoot)
 {
     zval *this = getThis();
@@ -551,7 +550,7 @@ PHP_METHOD(Sass, getMapRoot)
     sass_object *obj = Z_SASS_P(this);
     if (obj->map_root == NULL) RETURN_STRING("");
     RETURN_STRING(obj->map_root);
- 
+}
 
 PHP_METHOD(Sass, setMapRoot)
 {
@@ -570,8 +569,6 @@ PHP_METHOD(Sass, setMapRoot)
 
     RETURN_NULL();
 }
-
-
 
 
 PHP_METHOD(Sass, getPrecision)
@@ -632,7 +629,6 @@ PHP_METHOD(Sass, setEmbed)
     RETURN_NULL();
 }
 
-
 PHP_METHOD(Sass, getComments)
 {
     zval *this = getThis();
@@ -663,7 +659,6 @@ PHP_METHOD(Sass, setComments)
     RETURN_NULL();
 }
 
-
 PHP_METHOD(Sass, getIndent)
 {
     zval *this = getThis();
@@ -693,8 +688,6 @@ PHP_METHOD(Sass, setIndent)
 
     RETURN_NULL();
 }
-
-
 
 PHP_METHOD(Sass, setImporter)
 {
@@ -770,7 +763,6 @@ PHP_METHOD(Sass, setFunctions)
     ZVAL_COPY(&obj->function_table, funcs);
     RETURN_TRUE;
 }
-
 
 PHP_METHOD(Sass, getLibraryVersion)
 {
