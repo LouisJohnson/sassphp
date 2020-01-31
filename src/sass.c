@@ -228,8 +228,8 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
 
     zval path_info;
     array_init(&path_info);
-    add_assoc_string(&path_info, "absolute", sass_import_get_abs_path(import));
-    add_assoc_string(&path_info, "relative", sass_import_get_imp_path(import));
+    add_assoc_string(&path_info, "absolute", (char*) sass_import_get_abs_path(import));
+    add_assoc_string(&path_info, "relative", (char*) sass_import_get_imp_path(import));
 
     zval cb_args[2];
     zval cb_retval;
