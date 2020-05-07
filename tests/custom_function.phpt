@@ -8,12 +8,12 @@ custom importer: external file
 $sass = new Sass();
 $sass->setFunctions([
     'a($a)' => function($in, $path_info){
-        echo $in;
-        return "hello $in";
+        echo $in[0];
+        return sass_make_string("hello {$in[0]}");
     },
     'b($a)' => function($in, $path_info){
-        echo $in;
-        return "goodbye $in";
+        echo $in[0];
+        return sass_make_string("goodbye {$in[0]}");
     },
 ]);
 echo $sass->compile('body { content: a("foo"); } h1 { content: b("bar"); }');
