@@ -38,6 +38,11 @@ typedef struct sass_object {
 
 zend_class_entry *sass_ce;
 
+static void sass_value_dtor(zend_resource *rsrc)
+{
+    sass_delete_value((union Sass_Value *)rsrc->ptr);
+}
+
 static inline sass_object *sass_fetch_object(zend_object *obj)
 {
     return (sass_object *) ((char*) (obj) - XtOffsetOf(sass_object, zo));
@@ -187,6 +192,78 @@ Sass_Import_List sass_importer(const char* path, Sass_Importer_Entry cb, struct 
     return list;
 }
 
+void sass_convert_to_zval(const sass_object* const obj, const union Sass_Value* const s_args, zval* const out) {
+    switch (sass_value_get_tag(s_args)) {
+        case SASS_BOOLEAN: {
+            ZVAL_BOOL(out, sass_boolean_get_value(s_args));
+        } break;
+        case SASS_NUMBER: {
+            if (strlen(sass_number_get_unit(s_args)) == 0) {
+                ZVAL_DOUBLE(out, sass_number_get_value(s_args));
+            }
+            else {
+                union Sass_Value* const string = sass_value_stringify(s_args, false, obj->precision);
+                ZVAL_STRING(out, sass_string_get_value(string));
+                sass_delete_value(string);
+            }
+        } break;
+        case SASS_COLOR: {
+            char tmp[] = "#00000000";
+            unsigned char r, g, b, a;
+
+            r = sass_color_get_r(s_args);
+            g = sass_color_get_g(s_args);
+            b = sass_color_get_b(s_args);
+            a = fmin(sass_color_get_a(s_args) * 255, 255);
+
+            if (a == 255) {
+                snprintf(tmp, sizeof(tmp), "#%02x%02x%02x", r, g, b);
+            }
+            else {
+                snprintf(tmp, sizeof(tmp), "#%02x%02x%02x%02x", r, g, b, a);
+            }
+
+            ZVAL_STRING(out, tmp);
+        } break;
+        case SASS_STRING: {
+            ZVAL_STRING(out, sass_string_get_value(s_args));
+        } break;
+        case SASS_LIST: {
+            array_init(out);
+
+            for (size_t len = sass_list_get_length(s_args), i = 0; i < len; ++i) {
+                zval tmp;
+
+                sass_convert_to_zval(obj, sass_list_get_value(s_args, i), &tmp);
+                add_index_zval(out, i, &tmp);
+            }
+        } break;
+        case SASS_MAP: {
+            array_init(out);
+
+            for (size_t len = sass_map_get_length(s_args), i = 0; i < len; ++i) {
+                const union Sass_Value* map_key = sass_map_get_key(s_args, i);
+                const enum Sass_Tag map_key_tag = sass_value_get_tag(map_key);
+                zval tmp;
+
+                sass_convert_to_zval(obj, sass_map_get_value(s_args, i), &tmp);
+                if (map_key_tag == SASS_NUMBER && strlen(sass_number_get_unit(map_key)) == 0) {
+                    add_index_zval(out, sass_number_get_value(map_key), &tmp);
+                }
+                else if (map_key_tag == SASS_STRING) {
+                    add_assoc_zval(out, sass_string_get_value(map_key), &tmp);
+                }
+                else {
+                    union Sass_Value* const string = sass_value_stringify(map_key, false, obj->precision);
+                    add_assoc_zval(out, sass_string_get_value(string), &tmp);
+                    sass_delete_value(string);
+                }
+            }
+        } break;
+        default: break;
+    }
+}
+
 union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_Entry cb, struct Sass_Compiler* comp)
 {
     sass_object *obj = (sass_object *) sass_function_get_cookie(cb);
@@ -214,16 +291,6 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
         return sass_make_null();
     }
 
-    const char *string_value;
-    // For now: Stringify all arguments. Later, we should probably marshal
-    // this correctly and keep wrappers around native sass types. But for my
-    // personal purpose, this is enough.
-    if (!sass_value_is_string(s_args)){
-        string_value = sass_string_get_value(sass_value_stringify(s_args, false, obj->precision));
-    }else{
-        string_value = sass_string_get_value(s_args);
-    }
-
     Sass_Import_Entry import = sass_compiler_get_last_import(comp);
 
     zval path_info;
@@ -233,7 +300,7 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
 
     zval cb_args[2];
     zval cb_retval;
-    ZVAL_STRING(&cb_args[0], string_value);
+    sass_convert_to_zval(obj, s_args, &cb_args[0]);
     cb_args[1] = path_info;
 
     if (call_user_function_ex(EG(function_table), NULL, callback, &cb_retval, 2, cb_args, 0, NULL) != SUCCESS || Z_ISUNDEF(cb_retval)) {
@@ -243,12 +310,13 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
     zval_ptr_dtor(&cb_args[0]);
     zval_ptr_dtor(&cb_args[1]);
 
-    if (Z_TYPE_P(&cb_retval) != IS_STRING) {
-        convert_to_string(&cb_retval);
+    if (Z_TYPE_P(&cb_retval) == IS_RESOURCE) {
+        return sass_clone_value((union Sass_Value*) zend_fetch_resource(Z_RES_P(&cb_retval), "Sass_Value", sass_value_resnum));
     }
-    union Sass_Value *r = sass_make_string(Z_STRVAL_P(&cb_retval));
-    zval_ptr_dtor(&cb_retval);
-    return r;
+    else {
+        zend_throw_exception_ex(sass_function_exception_ce, 0 TSRMLS_CC, "Function return value must be a resource of type 'Sass_Value'");
+        return sass_make_null();
+    }
 }
 
 
@@ -773,6 +841,187 @@ PHP_METHOD(Sass, getLibraryVersion)
     RETURN_STRING(libsass_version());
 
 }
+
+PHP_FUNCTION(sass_make_null)
+{
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_null(), sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_boolean)
+{
+    bool val;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "b", &val) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_boolean(val), sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_string)
+{
+    char *str;
+    size_t str_len;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_string(str), sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_qstring)
+{
+    char *str;
+    size_t str_len;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_qstring(str), sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_number)
+{
+    double number;
+    char *unit = NULL;
+    size_t unit_len;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "d|s", &number, &unit, &unit_len) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_number(number, unit ?: ""), sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_color)
+{
+    double r, g, b, a = 1;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ddd|d", &r, &g, &b, &a) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_color(r, g, b, a), sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_list)
+{
+    zval *arr = NULL;
+    char *sep = " ";
+    size_t sep_len;
+    bool bracketed = false;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|asb", &arr, &sep, &sep_len, &bracketed) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    enum Sass_Separator sass_sep = SASS_SPACE;
+    if (sep_len > 0 && strncmp(sep, ",", fmin(sep_len, 1)) == 0) {
+        sass_sep = SASS_COMMA;
+    }
+    else if (strncmp(sep, " ", fmin(sep_len, 1)) != 0) {
+        zend_throw_exception_ex(sass_value_exception_ce, 0 TSRMLS_CC, "Separator must be a space (' ') or a comma (',')");
+        return;
+    }
+
+    if (!arr) {
+        ZVAL_RES(return_value, zend_register_resource((void*)sass_make_list(0, sass_sep, bracketed), sass_value_resnum));
+        return;
+    }
+
+    union Sass_Value *list = sass_make_list(zend_hash_num_elements(Z_ARRVAL_P(arr)), sass_sep, bracketed);
+
+    zend_ulong idx = 0;
+    zval *element;
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(arr), element) {
+        if (Z_TYPE_P(element) == IS_RESOURCE) {
+            sass_list_set_value(list, idx, sass_clone_value((union Sass_Value*) zend_fetch_resource(Z_RES_P(element), "Sass_Value", sass_value_resnum)));
+        }
+        else {
+            zend_throw_exception_ex(sass_value_exception_ce, 0 TSRMLS_CC, "List values must be a resource of type 'Sass_Value'");
+            sass_delete_value(list);
+            return;
+        }
+
+        ++idx;
+    } ZEND_HASH_FOREACH_END();
+
+    ZVAL_RES(return_value, zend_register_resource((void*)list, sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_map)
+{
+    zval *arr = NULL;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|a", &arr) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    if (!arr) {
+        ZVAL_RES(return_value, zend_register_resource((void*)sass_make_map(0), sass_value_resnum));
+        return;
+    }
+
+    union Sass_Value *map = sass_make_map(zend_hash_num_elements(Z_ARRVAL_P(arr)));
+
+    zval *element;
+    zend_ulong idx, num_idx;
+    zend_string *str_idx;
+
+    ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(arr), num_idx, str_idx, element) {
+        if (Z_TYPE_P(element) == IS_RESOURCE) {
+            if (str_idx) {
+                sass_map_set_key(map, idx, sass_make_string(ZSTR_VAL(str_idx)));
+            }
+            else {
+                sass_map_set_key(map, idx, sass_make_number(num_idx, ""));
+            }
+
+            sass_map_set_value(map, idx, sass_clone_value((union Sass_Value*) zend_fetch_resource(Z_RES_P(element), "Sass_Value", sass_value_resnum)));
+        }
+        else {
+            zend_throw_exception_ex(sass_value_exception_ce, 0 TSRMLS_CC, "List values must be a resource of type 'Sass_Value'");
+            sass_delete_value(map);
+            return;
+        }
+
+        ++idx;
+    } ZEND_HASH_FOREACH_END();
+
+    ZVAL_RES(return_value, zend_register_resource((void*)map, sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_error)
+{
+    char *str;
+    size_t str_len;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_error(str), sass_value_resnum));
+}
+
+PHP_FUNCTION(sass_make_warning)
+{
+    char *str;
+    size_t str_len;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    ZVAL_RES(return_value, zend_register_resource((void*)sass_make_warning(str), sass_value_resnum));
+}
+
 /* --------------------------------------------------------------
  * EXCEPTION HANDLING
  * ------------------------------------------------------------ */
@@ -837,6 +1086,48 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_setFunctions, 0, 0, 1)
     ZEND_ARG_ARRAY_INFO(0, function_table, 1)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_boolean, 0, 0, 1)
+    ZEND_ARG_INFO(0, boolval)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_string, 0, 0, 1)
+    ZEND_ARG_INFO(0, str)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_qstring, 0, 0, 1)
+    ZEND_ARG_INFO(0, str)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_number, 0, 0, 2)
+    ZEND_ARG_INFO(0, number)
+    ZEND_ARG_INFO(0, unit)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_color, 0, 0, 4)
+    ZEND_ARG_INFO(0, r)
+    ZEND_ARG_INFO(0, g)
+    ZEND_ARG_INFO(0, b)
+    ZEND_ARG_INFO(0, a)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_list, 0, 0, 3)
+    ZEND_ARG_INFO(0, list)
+    ZEND_ARG_INFO(0, separator)
+    ZEND_ARG_INFO(0, bracketed)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_map, 0, 0, 1)
+    ZEND_ARG_INFO(0, map)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_error, 0, 0, 1)
+    ZEND_ARG_INFO(0, message)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_warning, 0, 0, 1)
+    ZEND_ARG_INFO(0, message)
+ZEND_END_ARG_INFO()
+
 
 zend_function_entry sass_methods[] = {
     PHP_ME(Sass,  __construct,       arginfo_sass_void,           ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
@@ -865,11 +1156,25 @@ zend_function_entry sass_methods[] = {
     {NULL, NULL, NULL}
 };
 
+zend_function_entry sass_functions[] = {
+    PHP_FE(sass_make_null,    arginfo_sass_void)
+    PHP_FE(sass_make_boolean, arginfo_sass_make_boolean)
+    PHP_FE(sass_make_string,  arginfo_sass_make_string)
+    PHP_FE(sass_make_qstring, arginfo_sass_make_qstring)
+    PHP_FE(sass_make_number,  arginfo_sass_make_number)
+    PHP_FE(sass_make_color,   arginfo_sass_make_color)
+    PHP_FE(sass_make_list,    arginfo_sass_make_list)
+    PHP_FE(sass_make_map,     arginfo_sass_make_map)
+    PHP_FE(sass_make_error,   arginfo_sass_make_error)
+    PHP_FE(sass_make_warning, arginfo_sass_make_warning)
+};
 
 static PHP_MINIT_FUNCTION(sass)
 {
     zend_class_entry ce;
     zend_class_entry exception_ce;
+    zend_class_entry function_exception_ce;
+    zend_class_entry value_exception_ce;
 
     INIT_CLASS_ENTRY(ce, "Sass", sass_methods);
 
@@ -882,8 +1187,12 @@ static PHP_MINIT_FUNCTION(sass)
     sass_handlers.clone_obj = NULL;
 
     INIT_CLASS_ENTRY(exception_ce, "SassException", NULL);
+    INIT_CLASS_ENTRY(function_exception_ce, "SassFunctionException", NULL);
+    INIT_CLASS_ENTRY(value_exception_ce, "SassValueException", NULL);
 
     sass_exception_ce = zend_register_internal_class_ex(&exception_ce, sass_get_exception_base(TSRMLS_C));
+    sass_function_exception_ce = zend_register_internal_class_ex(&function_exception_ce, sass_get_exception_base(TSRMLS_C));
+    sass_value_exception_ce = zend_register_internal_class_ex(&value_exception_ce, sass_get_exception_base(TSRMLS_C));
 
     #define REGISTER_SASS_CLASS_CONST_LONG(name, value) zend_declare_class_constant_long(sass_ce, ZEND_STRS( #name ) - 1, value TSRMLS_CC)
 
@@ -894,6 +1203,7 @@ static PHP_MINIT_FUNCTION(sass)
 
     REGISTER_STRING_CONSTANT("SASS_FLAVOR", SASS_FLAVOR, CONST_CS | CONST_PERSISTENT);
 
+    sass_value_resnum = zend_register_list_destructors_ex(sass_value_dtor, NULL, "Sass_Value", module_number);
 
     return SUCCESS;
 }
@@ -911,7 +1221,7 @@ static PHP_MINFO_FUNCTION(sass)
 static zend_module_entry sass_module_entry = {
     STANDARD_MODULE_HEADER,
     "sass",
-    NULL,
+    sass_functions,
     PHP_MINIT(sass),
     NULL,
     NULL,

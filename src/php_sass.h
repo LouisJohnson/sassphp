@@ -24,11 +24,18 @@
 
 #include <sass.h>
 #include <sass2scss.h>
+#include <sass/values.h>
 
 zend_class_entry *sass_ce;
 zend_class_entry *sass_exception_ce;
+zend_class_entry *sass_function_exception_ce;
+zend_class_entry *sass_value_exception_ce;
 
 zend_class_entry *sass_get_exception_base();
+
+int sass_value_resnum;
+
+static void sass_value_dtor(zend_resource *rsrc);
 
 #ifdef PHP_WIN32
 #define PHP_SASS_API __declspec(dllexport)
@@ -63,5 +70,16 @@ PHP_METHOD(Sass, getMapRoot);
 PHP_METHOD(Sass, setMapRoot);
 PHP_METHOD(Sass, setImporter);
 PHP_METHOD(Sass, setFunctions);
+
+PHP_FUNCTION(sass_make_null);
+PHP_FUNCTION(sass_make_boolean);
+PHP_FUNCTION(sass_make_string);
+PHP_FUNCTION(sass_make_qstring);
+PHP_FUNCTION(sass_make_number);
+PHP_FUNCTION(sass_make_color);
+PHP_FUNCTION(sass_make_list);
+PHP_FUNCTION(sass_make_map);
+PHP_FUNCTION(sass_make_error);
+PHP_FUNCTION(sass_make_warning);
 
 #endif
