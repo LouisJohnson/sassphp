@@ -972,7 +972,7 @@ PHP_FUNCTION(sass_make_map)
     union Sass_Value *map = sass_make_map(zend_hash_num_elements(Z_ARRVAL_P(arr)));
 
     zval *element;
-    zend_ulong idx, num_idx;
+    zend_ulong idx = 0, num_idx;
     zend_string *str_idx;
 
     ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(arr), num_idx, str_idx, element) {
