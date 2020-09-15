@@ -260,7 +260,9 @@ void sass_convert_to_zval(const sass_object* const obj, const union Sass_Value* 
                 }
             }
         } break;
-        default: break;
+        default: {
+            ZVAL_NULL(out);
+        } break;
     }
 }
 
