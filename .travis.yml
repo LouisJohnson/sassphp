@@ -35,7 +35,7 @@ install:
 before_install:
   - echo $LANG
   - echo $LC_ALL
-  - composer require satooshi/php-coveralls --dev
+  - composer require --dev php-coveralls/php-coveralls
   - git submodule init
   - git submodule update
 
