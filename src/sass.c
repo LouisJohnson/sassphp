@@ -95,7 +95,7 @@ Sass_Import_Entry array_to_import(zval* val){
 
     int len = zend_hash_num_elements(Z_ARRVAL_P(val));
     if (len < 1){
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Need at least redirected path");
+        zend_throw_exception_ex(sass_exception_ce, 0 , "Need at least redirected path");
         return NULL;
     }
 
@@ -128,7 +128,7 @@ Sass_Import_List sass_importer(const char* path, Sass_Importer_Entry cb, struct 
 
     sass_object *obj = (sass_object *) sass_importer_get_cookie(cb);
     if (obj == NULL){
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Internal Error: Failed to retrieve object reference");
+        zend_throw_exception_ex(sass_exception_ce, 0 , "Internal Error: Failed to retrieve object reference");
         return NULL;
     }
 
@@ -136,10 +136,11 @@ Sass_Import_List sass_importer(const char* path, Sass_Importer_Entry cb, struct 
     zval cb_retval;
     ZVAL_STRING(&cb_args[0], path);
 
-    if (call_user_function_ex(EG(function_table), NULL, &obj->importer, &cb_retval, 1, cb_args, 0, NULL) != SUCCESS || Z_ISUNDEF(cb_retval)) {
+    if (call_user_function(EG(function_table), NULL, &obj->importer, &cb_retval, 1, cb_args) != SUCCESS || Z_ISUNDEF(cb_retval)) {
         zval_ptr_dtor(&cb_args[0]);
         return NULL;
     }
+	
     zval_ptr_dtor(&cb_args[0]);
 
     if (Z_TYPE(cb_retval) == IS_NULL){
@@ -149,7 +150,7 @@ Sass_Import_List sass_importer(const char* path, Sass_Importer_Entry cb, struct 
 
     if (Z_TYPE(cb_retval) != IS_ARRAY){
         zval_ptr_dtor(&cb_retval);
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Importer callback must return an array");
+        zend_throw_exception_ex(sass_exception_ce, 0 , "Importer callback must return an array");
         return NULL;
     }
 
@@ -163,7 +164,7 @@ Sass_Import_List sass_importer(const char* path, Sass_Importer_Entry cb, struct 
     zval *first_element = zend_hash_index_find(Z_ARRVAL(cb_retval), 0);
     if (first_element == NULL){
         zval_ptr_dtor(&cb_retval);
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Importer callback must return an array");
+        zend_throw_exception_ex(sass_exception_ce, 0 , "Importer callback must return an array");
         return NULL;
     }
 
@@ -175,7 +176,7 @@ Sass_Import_List sass_importer(const char* path, Sass_Importer_Entry cb, struct 
         ZEND_HASH_FOREACH_VAL(Z_ARRVAL(cb_retval), element) {
             if (Z_TYPE_P(element) != IS_ARRAY){
                 zval_ptr_dtor(&cb_retval);
-                zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Importer callback must return an array");
+                zend_throw_exception_ex(sass_exception_ce, 0 , "Importer callback must return an array");
                 return NULL;
             }
             Sass_Import_Entry imp = array_to_import(element);
@@ -270,14 +271,14 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
 {
     sass_object *obj = (sass_object *) sass_function_get_cookie(cb);
     if (obj == NULL){
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Internal Error: Failed to retrieve object reference");
+        zend_throw_exception_ex(sass_exception_ce, 0 , "Internal Error: Failed to retrieve object reference");
         return NULL;
     }
 
     const char *signature = sass_function_get_signature(cb);
 
     if (Z_TYPE(obj->function_table) != IS_ARRAY){
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Internal Error: Function table has vanished");
+        zend_throw_exception_ex(sass_exception_ce, 0 , "Internal Error: Function table has vanished");
         return NULL;
     }
 
@@ -289,7 +290,7 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
     }
 
     if (!zend_is_callable(callback, 0, NULL)) {
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Internal Error: value for sig %s lost its callbackyness", ZSTR_VAL(fname));
+        zend_throw_exception_ex(sass_exception_ce, 0 , "Internal Error: value for sig %s lost its callbackyness", ZSTR_VAL(fname));
         return sass_make_null();
     }
 
@@ -305,10 +306,11 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
     sass_convert_to_zval(obj, s_args, &cb_args[0]);
     cb_args[1] = path_info;
 
-    if (call_user_function_ex(EG(function_table), NULL, callback, &cb_retval, 2, cb_args, 0, NULL) != SUCCESS || Z_ISUNDEF(cb_retval)) {
+    if (call_user_function(EG(function_table), NULL, callback, &cb_retval, 2, cb_args) != SUCCESS || Z_ISUNDEF(cb_retval)) {
         zval_ptr_dtor(&cb_args[0]);
         return sass_make_null();
     }
+	
     zval_ptr_dtor(&cb_args[0]);
     zval_ptr_dtor(&cb_args[1]);
 
@@ -316,7 +318,7 @@ union Sass_Value* sass_function(const union Sass_Value* s_args, Sass_Function_En
         return sass_clone_value((union Sass_Value*) zend_fetch_resource(Z_RES_P(&cb_retval), "Sass_Value", sass_value_resnum));
     }
     else {
-        zend_throw_exception_ex(sass_function_exception_ce, 0 TSRMLS_CC, "Function return value must be a resource of type 'Sass_Value'");
+        zend_throw_exception_ex(sass_function_exception_ce, 0 , "Function return value must be a resource of type 'Sass_Value'");
         return sass_make_null();
     }
 }
@@ -327,7 +329,7 @@ PHP_METHOD(Sass, __construct)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_NULL();
     }
  
@@ -393,11 +395,11 @@ void set_options(sass_object *this, struct Sass_Context *ctx)
 
         ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL(this->function_table), num_key, string_key, val) {
             if (string_key == NULL){
-                zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Keys must be function declarations");
+                zend_throw_exception_ex(sass_exception_ce, 0 , "Keys must be function declarations");
                 return;
             }
             if (!zend_is_callable(val, 0, NULL)) {
-                zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Values must be callables, but value at `%s` isn't", ZSTR_VAL(string_key));
+                zend_throw_exception_ex(sass_exception_ce, 0 , "Values must be callables, but value at `%s` isn't", ZSTR_VAL(string_key));
                 return;
             }
             fn = sass_make_function(ZSTR_VAL(string_key), sass_function, (void*)this);
@@ -425,7 +427,7 @@ PHP_METHOD(Sass, compile)
     size_t source_len, input_path_len = 0;
 
     // Use zend_parse_parameters() to grab our source from the function call
-    if (zend_parse_parameters_throw(ZEND_NUM_ARGS() TSRMLS_CC, "s|s", &source, &source_len, &input_path, &input_path_len) == FAILURE){
+    if (zend_parse_parameters_throw(ZEND_NUM_ARGS() , "s|s", &source, &source_len, &input_path, &input_path_len) == FAILURE){
         RETURN_FALSE;
     }
 
@@ -444,7 +446,7 @@ PHP_METHOD(Sass, compile)
     // Check the context for any errors...
     if (status != 0)
     {
-        zend_throw_exception(sass_exception_ce, sass_context_get_error_message(ctx), 0 TSRMLS_CC);
+        zend_throw_exception(sass_exception_ce, sass_context_get_error_message(ctx), 0 );
     }
     else
     {
@@ -470,7 +472,7 @@ PHP_METHOD(Sass, compileFile)
     size_t file_len;
  
     // Grab the file name from the function
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &file, &file_len) == FAILURE)
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &file, &file_len) == FAILURE)
     {
         RETURN_FALSE;
     }
@@ -478,7 +480,7 @@ PHP_METHOD(Sass, compileFile)
     // First, do a little checking of our own. Does the file exist?
     if( access( file, F_OK ) == -1 )
     {
-        zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "File %s could not be found", file);
+        zend_throw_exception_ex(sass_exception_ce, 0 , "File %s could not be found", file);
         RETURN_FALSE;
     }
 
@@ -493,7 +495,7 @@ PHP_METHOD(Sass, compileFile)
     // Check the context for any errors...
     if (status != 0)
     {
-        zend_throw_exception(sass_exception_ce, sass_context_get_error_message(ctx), 0 TSRMLS_CC);
+        zend_throw_exception(sass_exception_ce, sass_context_get_error_message(ctx), 0 );
     }
     else
     {
@@ -520,7 +522,7 @@ PHP_METHOD(Sass, getStyle)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -535,7 +537,7 @@ PHP_METHOD(Sass, setStyle)
 
     long new_style;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &new_style) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "l", &new_style) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -549,7 +551,7 @@ PHP_METHOD(Sass, getIncludePath)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -566,7 +568,7 @@ PHP_METHOD(Sass, setIncludePath)
     char *path;
     size_t path_len;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &path, &path_len) == FAILURE)
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &path, &path_len) == FAILURE)
         RETURN_FALSE;
 
     sass_object *obj = Z_SASS_P(this);
@@ -582,7 +584,7 @@ PHP_METHOD(Sass, getMapPath)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -598,7 +600,7 @@ PHP_METHOD(Sass, setMapPath)
     char *path;
     size_t path_len;
  
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &path, &path_len) == FAILURE)
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &path, &path_len) == FAILURE)
         RETURN_FALSE;
 
     sass_object *obj = Z_SASS_P(this);
@@ -613,7 +615,7 @@ PHP_METHOD(Sass, getMapRoot)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -629,7 +631,7 @@ PHP_METHOD(Sass, setMapRoot)
     char *path;
     size_t path_len;
  
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &path, &path_len) == FAILURE)
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &path, &path_len) == FAILURE)
         RETURN_FALSE;
 
     sass_object *obj = Z_SASS_P(this);
@@ -645,7 +647,7 @@ PHP_METHOD(Sass, getPrecision)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -659,7 +661,7 @@ PHP_METHOD(Sass, setPrecision)
 
     long new_precision;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &new_precision) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "l", &new_precision) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -673,7 +675,7 @@ PHP_METHOD(Sass, getEmbed)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -688,7 +690,7 @@ PHP_METHOD(Sass, setEmbed)
 
     bool new_map_embed;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "b", &new_map_embed) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "b", &new_map_embed) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -703,7 +705,7 @@ PHP_METHOD(Sass, getComments)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -718,7 +720,7 @@ PHP_METHOD(Sass, setComments)
 
     bool new_comments;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "b", &new_comments) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "b", &new_comments) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -733,7 +735,7 @@ PHP_METHOD(Sass, getIndent)
 {
     zval *this = getThis();
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -748,7 +750,7 @@ PHP_METHOD(Sass, setIndent)
 
     bool new_indent;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "b", &new_indent) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "b", &new_indent) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -764,7 +766,7 @@ PHP_METHOD(Sass, setImporter)
     zval *importer;
     zend_string *callback_name;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &importer) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "z", &importer) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -817,10 +819,10 @@ PHP_METHOD(Sass, setFunctions)
 
     ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(funcs), num_key, string_key, val) {
         if (string_key == NULL){
-            zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Keys must be function declarations");
+            zend_throw_exception_ex(sass_exception_ce, 0 , "Keys must be function declarations");
         }
         if (!zend_is_callable(val, 0, NULL)) {
-            zend_throw_exception_ex(sass_exception_ce, 0 TSRMLS_CC, "Values must be callables, but value at `%s` isn't", ZSTR_VAL(string_key));
+            zend_throw_exception_ex(sass_exception_ce, 0 , "Values must be callables, but value at `%s` isn't", ZSTR_VAL(string_key));
             RETURN_FALSE;
         }
     } ZEND_HASH_FOREACH_END();
@@ -836,7 +838,7 @@ PHP_METHOD(Sass, setFunctions)
 
 PHP_METHOD(Sass, getLibraryVersion)
 {
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -846,7 +848,7 @@ PHP_METHOD(Sass, getLibraryVersion)
 
 PHP_FUNCTION(sass_make_null)
 {
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "", NULL) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "", NULL) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -857,7 +859,7 @@ PHP_FUNCTION(sass_make_boolean)
 {
     bool val;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "b", &val) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "b", &val) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -869,7 +871,7 @@ PHP_FUNCTION(sass_make_string)
     char *str;
     size_t str_len;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &str, &str_len) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -881,7 +883,7 @@ PHP_FUNCTION(sass_make_qstring)
     char *str;
     size_t str_len;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &str, &str_len) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -894,7 +896,7 @@ PHP_FUNCTION(sass_make_number)
     char *unit = NULL;
     size_t unit_len;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "d|s", &number, &unit, &unit_len) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "d|s", &number, &unit, &unit_len) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -905,7 +907,7 @@ PHP_FUNCTION(sass_make_color)
 {
     double r, g, b, a = 1;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ddd|d", &r, &g, &b, &a) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "ddd|d", &r, &g, &b, &a) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -919,7 +921,7 @@ PHP_FUNCTION(sass_make_list)
     size_t sep_len;
     bool bracketed = false;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|asb", &arr, &sep, &sep_len, &bracketed) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "|asb", &arr, &sep, &sep_len, &bracketed) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -928,7 +930,7 @@ PHP_FUNCTION(sass_make_list)
         sass_sep = SASS_COMMA;
     }
     else if (strncmp(sep, " ", fmin(sep_len, 1)) != 0) {
-        zend_throw_exception_ex(sass_value_exception_ce, 0 TSRMLS_CC, "Separator must be a space (' ') or a comma (',')");
+        zend_throw_exception_ex(sass_value_exception_ce, 0 , "Separator must be a space (' ') or a comma (',')");
         return;
     }
 
@@ -947,7 +949,7 @@ PHP_FUNCTION(sass_make_list)
             sass_list_set_value(list, idx, sass_clone_value((union Sass_Value*) zend_fetch_resource(Z_RES_P(element), "Sass_Value", sass_value_resnum)));
         }
         else {
-            zend_throw_exception_ex(sass_value_exception_ce, 0 TSRMLS_CC, "List values must be a resource of type 'Sass_Value'");
+            zend_throw_exception_ex(sass_value_exception_ce, 0 , "List values must be a resource of type 'Sass_Value'");
             sass_delete_value(list);
             return;
         }
@@ -962,7 +964,7 @@ PHP_FUNCTION(sass_make_map)
 {
     zval *arr = NULL;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|a", &arr) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "|a", &arr) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -989,7 +991,7 @@ PHP_FUNCTION(sass_make_map)
             sass_map_set_value(map, idx, sass_clone_value((union Sass_Value*) zend_fetch_resource(Z_RES_P(element), "Sass_Value", sass_value_resnum)));
         }
         else {
-            zend_throw_exception_ex(sass_value_exception_ce, 0 TSRMLS_CC, "List values must be a resource of type 'Sass_Value'");
+            zend_throw_exception_ex(sass_value_exception_ce, 0 , "List values must be a resource of type 'Sass_Value'");
             sass_delete_value(map);
             return;
         }
@@ -1005,7 +1007,7 @@ PHP_FUNCTION(sass_make_error)
     char *str;
     size_t str_len;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &str, &str_len) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -1017,7 +1019,7 @@ PHP_FUNCTION(sass_make_warning)
     char *str;
     size_t str_len;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &str, &str_len) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() , "s", &str, &str_len) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -1028,9 +1030,9 @@ PHP_FUNCTION(sass_make_warning)
  * EXCEPTION HANDLING
  * ------------------------------------------------------------ */
 
-zend_class_entry *sass_get_exception_base(TSRMLS_D)
+zend_class_entry *sass_get_exception_base()
 {
-    return zend_exception_get_default(TSRMLS_C);
+    return zend_exception_get_default();
 }
 
 /* --------------------------------------------------------------
@@ -1131,6 +1133,8 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_sass_make_warning, 0, 0, 1)
 ZEND_END_ARG_INFO()
 
 
+
+
 zend_function_entry sass_methods[] = {
     PHP_ME(Sass,  __construct,       arginfo_sass_void,           ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(Sass,  compile,           arginfo_sass_compile,        ZEND_ACC_PUBLIC)
@@ -1154,7 +1158,7 @@ zend_function_entry sass_methods[] = {
     PHP_ME(Sass,  setImporter,       arginfo_sass_setImporter,    ZEND_ACC_PUBLIC)
     PHP_ME(Sass,  setFunctions,      arginfo_sass_setFunctions,   ZEND_ACC_PUBLIC)
     PHP_ME(Sass,  getLibraryVersion, arginfo_sass_void,           ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    PHP_MALIAS(Sass, compile_file, compileFile, NULL, ZEND_ACC_PUBLIC)
+    PHP_MALIAS(Sass, compile_file, compileFile, arginfo_sass_compileFile, ZEND_ACC_PUBLIC)
     {NULL, NULL, NULL}
 };
 
@@ -1180,7 +1184,7 @@ static PHP_MINIT_FUNCTION(sass)
 
     INIT_CLASS_ENTRY(ce, "Sass", sass_methods);
 
-    sass_ce = zend_register_internal_class(&ce TSRMLS_CC);
+    sass_ce = zend_register_internal_class(&ce );
     sass_ce->create_object = sass_create_handler;
 
     memcpy(&sass_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
@@ -1192,11 +1196,11 @@ static PHP_MINIT_FUNCTION(sass)
     INIT_CLASS_ENTRY(function_exception_ce, "SassFunctionException", NULL);
     INIT_CLASS_ENTRY(value_exception_ce, "SassValueException", NULL);
 
-    sass_exception_ce = zend_register_internal_class_ex(&exception_ce, sass_get_exception_base(TSRMLS_C));
-    sass_function_exception_ce = zend_register_internal_class_ex(&function_exception_ce, sass_get_exception_base(TSRMLS_C));
-    sass_value_exception_ce = zend_register_internal_class_ex(&value_exception_ce, sass_get_exception_base(TSRMLS_C));
+    sass_exception_ce = zend_register_internal_class_ex(&exception_ce, sass_get_exception_base());
+    sass_function_exception_ce = zend_register_internal_class_ex(&function_exception_ce, sass_get_exception_base());
+    sass_value_exception_ce = zend_register_internal_class_ex(&value_exception_ce, sass_get_exception_base());
 
-    #define REGISTER_SASS_CLASS_CONST_LONG(name, value) zend_declare_class_constant_long(sass_ce, ZEND_STRS( #name ) - 1, value TSRMLS_CC)
+    #define REGISTER_SASS_CLASS_CONST_LONG(name, value) zend_declare_class_constant_long(sass_ce, ZEND_STRS( #name ) - 1, value )
 
     REGISTER_SASS_CLASS_CONST_LONG(STYLE_NESTED, SASS_STYLE_NESTED);
     REGISTER_SASS_CLASS_CONST_LONG(STYLE_EXPANDED, SASS_STYLE_EXPANDED);
